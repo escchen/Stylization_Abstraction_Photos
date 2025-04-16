@@ -65,7 +65,8 @@ The purpose of this tool is to take in an image, ephasize the meaningful structu
 ```
 
 ## 1. Point Selection
-- Something
+- Ideally, selected through eye-tracking.
+- Currently, just manually selecting points.
 
 ## 2. Image Preprocessing
 
