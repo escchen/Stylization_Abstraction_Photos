@@ -1,5 +1,9 @@
+# COMPONENT DETAILS:
 # Input: User Image (I(x,y))
 # Output: N-User Selected Points: [(px1, py1), (px2, py2), ..., (pxn, pyn)]
+
+# CONFIG DETAILS:
+# number_pts: Number of points (Areas of Focus)
 
 from modules.base import BaseComponent
 import matplotlib.pyplot as plt
@@ -9,21 +13,17 @@ class PointSelection(BaseComponent):
     def __init__(self, config=None):
         super().__init__(config)
 
-    def pre_process(self, path):
-        im = plt.imread(path)
-        info = np.iinfo(im.dtype) # get range of values
-        im = im.astype(np.float32) / info.max # normalize the image into range 0 and 1
-        return im
-
-    def process(self, inputs):
+    def process(self, image_matrix):
         """
         Loads the image in matplotlib window and makes user select n points.
         Defaults to n=10, unless different value passed in config
-        inputs: Path to image
+        inputs: input image matrix
         """
-        image_matrix = self.pre_process(inputs)   
-        N = 10
+
+        number_pts = self.config.get("number_pts", 10)
+        
         plt.imshow(image_matrix)
-        points = plt.ginput(N)
+        points = plt.ginput(number_pts)
         plt.close()
-        return image_matrix, points
+        
+        return points
