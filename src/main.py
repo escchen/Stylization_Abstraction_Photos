@@ -1,7 +1,7 @@
 # Entry-Point script and entire pipeline
 
 # PIPELINE
-#  1. Point Selection (point_selection.py)
+##  1. Point Selection (point_selection.py)
 ## 2. Image Preprocessing 
 ### 2.1 Edge Detection (edge_detection.py)
 ### 2.2 Segmentation (segmentation.py)
