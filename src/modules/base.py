@@ -12,6 +12,7 @@ class BaseComponent:
     def __init__(self, config=None):
         if config:
             self.config = config
+        self.config = {}
     
     def load_inputs(self, inputs):
         return inputs

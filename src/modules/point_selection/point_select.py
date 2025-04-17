@@ -12,6 +12,7 @@ import numpy as np
 class PointSelection(BaseComponent):
     def __init__(self, config=None):
         super().__init__(config)
+        self.number_pts = config.get("number_pts", 10)
 
     def process(self, image_matrix):
         """
@@ -20,10 +21,8 @@ class PointSelection(BaseComponent):
         inputs: input image matrix
         """
 
-        number_pts = self.config.get("number_pts", 10)
-        
         plt.imshow(image_matrix)
-        points = plt.ginput(number_pts)
+        points = plt.ginput(self.number_pts)
         plt.close()
         
         return points
