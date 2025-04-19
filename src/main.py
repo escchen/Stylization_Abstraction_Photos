@@ -47,6 +47,16 @@ edge_detector.save_outputs(edges,
 ### 2.2 Segmentation (segmentation.py)
 labels = segmenter.process(input_img)
 
+hist, bins = np.histogram(labels.flatten(), bins=255)
+
+# Plot the histogram
+plt.hist(labels.flatten(), bins=255)
+plt.title("Histogram of NumPy Matrix")
+plt.xlabel("Value")
+plt.ylabel("Frequency")
+plt.show()
+
+
 segmenter.save_outputs(labels, "../examples/temp/fire_hydrant_segment.jpg")
 
 ### 2.3 Hierarchial Representation (hierarchy.py)
