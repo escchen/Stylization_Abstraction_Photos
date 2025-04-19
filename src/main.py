@@ -1,69 +1,118 @@
-# Entire Pipeline 
+import cv2
 import numpy as np
-import matplotlib.pyplot as plt
 import os
-from modules.point_selection.point_select import PointSelection
-from modules.pre_process.edge_detection import EdgeDetection
-from modules.pre_process.segmentation import Segmentation
-filename = os.path.basename(__file__)
+from modules.base import BaseComponent
 
 
-# PIPELINE
-# 0. Load input image and normalize
-path = "../examples/input/fire_hydrant.jpg"
-input_img = plt.imread(path)
-info = np.iinfo(input_img.dtype) # get range of values
-input_img = input_img.astype(np.float32) / info.max # normalize img into range 0 and 1
+class Segmentation(BaseComponent):
+    def __init__(self, config=None):
+        """
+        Segmentation class for processing images using Mean Shift filtering
+        and Watershed segmentation.
 
-print(f"DEBUG [in {filename}]:",
-      f"{input_img.shape=}",
-      f"{np.max(input_img), np.min(input_img)=}", sep='\n')
+        :param config: Configuration dictionary.
+                       - 'spatial_radius': Spatial radius for Mean Shift (default: 5).
+                       - 'color_radius': Color radius for Mean Shift (default: 5.0).
+                       - 'temp_dir': Directory for saving intermediate results (default: '../examples/temp/').
+        """
+        super().__init__(config)
+        self.spatial_radius = self.config.get('spatial_radius', 5)
+        self.color_radius = self.config.get('color_radius', 5.0)
+        self.temp_dir = self.config.get('temp_dir', '../examples/temp/')
 
-# DEFINE CONFIGS (Hyperparameters, Thresholds, etc) <- Optional
-# To know what values to specfiy here, look at the top of respective source file.
-point_selection_config = {"number_pts": 2}
-edge_detection_config = {}
-segmentation_config = {}
-# Instantiate Pipeline Modules 
-point_selecter  = PointSelection(point_selection_config)
-edge_detector   = EdgeDetection(edge_detection_config) 
-segmenter       = Segmentation(segmentation_config)
+        # Ensure temp directory exists
+        os.makedirs(self.temp_dir, exist_ok=True)
 
-# Running Pipeline
-## 1. Point Selection (point_selection.py)
-points = point_selecter.process(input_img)
-print(f"DEBUG [in {filename}]=, {len(points)=}, {points=}")
+    def save_temp_result(self, result, name):
+        """
+        Save an intermediate result to the temp directory.
 
-## 2. Image Preprocessing 
-### 2.1 Edge Detection (edge_detection.py)
-edges = edge_detector.process(input_img)
-print(f"DEBUG [in {filename}]=, {edges.shape=},"
-      f"{np.unique(edges)=}"
-      f"{np.sum(edges == 255)=}" # If pixel is part of an edge.
-      f"{np.sum(edges == 0)=}") # 
+        :param result: The result to save (image or matrix).
+        :param name: The name of the file to save the result as.
+        """
+        path = os.path.join(self.temp_dir, f"{self.__class__.__name__}_{name}.png")
+        cv2.imwrite(path, result)
 
-edge_detector.save_outputs(edges, 
-                           "../examples/temp/fire_hydrant_edges.jpg" )
-### 2.2 Segmentation (segmentation.py)
-labels = segmenter.process(input_img)
+    def load_inputs(self, image_path):
+        """
+        Load the input image.
 
-hist, bins = np.histogram(labels.flatten(), bins=255)
+        :param image_path: Path to the input image.
+        :return: Color image as a NumPy array.
+        """
+        image = cv2.imread(image_path)
+        if image is None:
+            raise ValueError(f"Image at {image_path} could not be loaded.")
+        return image
 
-# Plot the histogram
-plt.hist(labels.flatten(), bins=255)
-plt.title("Histogram of NumPy Matrix")
-plt.xlabel("Value")
-plt.ylabel("Frequency")
-plt.show()
+    def process(self, image):
+        """
+        Perform segmentation on the input image.
 
+        :param image: Input color image as a NumPy array.
+        :return: Labeled matrix where each pixel value represents a region.
+        """
+        # Step 1: Validate and preprocess input image
+        if len(image.shape) == 2:  # Convert grayscale to BGR
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if image.dtype != np.uint8:  # Ensure image is uint8
+            image = cv2.convertScaleAbs(image)
+        if image.max() <= 1:  # If normalized to [0, 1], scale to [0, 255]
+            image = (image * 255).astype('uint8')
 
-segmenter.save_outputs(labels, "../examples/temp/fire_hydrant_segment.jpg")
+        # Save initial input
+        self.save_temp_result(image, "input_image")
 
-### 2.3 Hierarchial Representation (hierarchy.py)
-## 3. Region Selection (region_selection.py)
-## 4. Post-processing 
-### 4.1 Pruning (pruning.py)
-### 4.2 Smoothing (smoothing.py)
-## 5. Render (rendering.py)
-### 5.1 Region Rendering
-### 5.2 Edge Overlay
+        # Step 2: Enhance contrast
+        gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        equalized_image = cv2.equalizeHist(gray_image)
+        enhanced_image = cv2.cvtColor(equalized_image, cv2.COLOR_GRAY2BGR)
+
+        # Save enhanced image
+        self.save_temp_result(enhanced_image, "enhanced_image")
+
+        # Step 3: Apply Mean Shift filtering
+        filtered_image = cv2.pyrMeanShiftFiltering(
+            enhanced_image,
+            sp=self.spatial_radius,
+            sr=self.color_radius
+        )
+        self.save_temp_result(filtered_image, "filtered_image")
+
+        # Step 4: Convert filtered image to grayscale
+        gray_filtered = cv2.cvtColor(filtered_image, cv2.COLOR_BGR2GRAY)
+        self.save_temp_result(gray_filtered, "filtered_grayscale")
+
+        # Step 5: Edge detection
+        edges = cv2.Canny(gray_filtered, 30, 100)
+        self.save_temp_result(edges, "edges")
+
+        # Step 6: Create markers for Watershed
+        _, markers = cv2.connectedComponents(cv2.bitwise_not(edges))
+        self.save_temp_result((markers * 10).astype('uint8'), "initial_markers")  # Visualize markers
+
+        # Step 7: Apply Watershed
+        markers = markers + 1  # Increment to ensure background is not 0
+        markers = cv2.watershed(image, markers)
+
+        # Normalize markers for visualization
+        markers_visual = cv2.normalize(markers, None, 0, 255, cv2.NORM_MINMAX).astype('uint8')
+        self.save_temp_result(markers_visual, "final_markers")
+
+        return markers
+
+    def save_outputs(self, labels, output_path):
+        """
+        Save the final segmented image.
+
+        :param labels: Labeled regions as a NumPy array.
+        :param output_path: Path to save the segmented image.
+        """
+        normalized_labels = cv2.normalize(
+            labels,
+            None,
+            0,
+            255,
+            cv2.NORM_MINMAX
+        ).astype('uint8')
+        cv2.imwrite(output_path, normalized_labels)
